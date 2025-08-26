@@ -11,7 +11,6 @@ import UserProfile from './components/Profile/UserProfile';
 import NoteUpload from './components/Notes/NoteUpload';
 import NoteView from './components/Notes/NoteView';
 import CourseView from './components/Courses/CourseView';
-import Notifications from './components/Notifications/Notifications'; // <-- IMPORT NEW COMPONENT
 import FullPageSpinner from './components/Layout/FullPageSpinner';
 
 function ProtectedRoute({ user, children }) {
@@ -58,10 +57,7 @@ function App() {
               path="/course/:courseName" 
               element={<ProtectedRoute user={user}><CourseView /></ProtectedRoute>} 
             />
-            <Route 
-              path="/notifications" 
-              element={<ProtectedRoute user={user}><Notifications /></ProtectedRoute>} 
-            />
+            
 
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>

@@ -63,7 +63,6 @@ export default function Header({ user }) {
                         <>
                             <NavLink to="/dashboard" style={({ isActive }) => isActive ? (theme === 'dark' ? darkActiveLinkStyle : activeLinkStyle) : undefined} className="text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium">Dashboard</NavLink>
                             <NavLink to="/upload" style={({ isActive }) => isActive ? (theme === 'dark' ? darkActiveLinkStyle : activeLinkStyle) : undefined} className="text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium">Upload Note</NavLink>
-                            <NavLink to="/notifications" style={({ isActive }) => isActive ? (theme === 'dark' ? darkActiveLinkStyle : activeLinkStyle) : undefined} className="text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium">Notifications</NavLink>
                             <NavLink to="/profile" style={({ isActive }) => isActive ? (theme === 'dark' ? darkActiveLinkStyle : activeLinkStyle) : undefined} className="text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium">Profile</NavLink>
                             <button onClick={handleSignOut} className="bg-red-500 text-white hover:bg-red-600 px-3 py-2 rounded-md text-sm font-medium">Sign Out</button>
                         </>
