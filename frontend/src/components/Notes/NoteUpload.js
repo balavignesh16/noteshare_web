@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, increment, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
 import allCourses from '../../courseData';
 import SearchableDropdown from './SearchableDropdown';
+import { useProfile } from '../../context/ProfileContext';
 
 const uploadInputClass = "appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm";
 
@@ -12,6 +13,7 @@ export default function NoteUpload() {
     const [error, setError] = useState('');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
+    const { profile } = useProfile();
 
     const handleDataChange = (e) => setNoteData({ ...noteData, [e.target.name]: e.target.value });
     const handleCourseSelect = (selectedValue) => setNoteData(prev => ({ ...prev, course: selectedValue }));
@@ -35,45 +37,69 @@ export default function NoteUpload() {
         setError(''); setMessage(''); setLoading(true);
 
         const user = auth.currentUser;
-        if (!user) {
+        if (!user || !profile) {
             setError("You must be logged in to upload notes.");
             setLoading(false);
             return;
         }
 
         try {
-            // Step 1: Upload the file to our own API endpoint
             const formData = new FormData();
             formData.append('file', file);
-
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData,
-            });
-
+            const response = await fetch('/api/upload', { method: 'POST', body: formData });
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'File upload failed on the server.');
             }
-
             const data = await response.json();
-            const downloadURL = data.url; // The URL from Vercel Blob
+            const downloadURL = data.url;
 
-            // Step 2: Save the metadata and the new URL to Firestore
             await addDoc(collection(db, "notes"), {
                 userId: user.uid,
+                userName: profile.name,
                 ...noteData,
                 module: Number(noteData.module),
                 tags: noteData.tags.split(',').map(tag => tag.trim()),
                 fileUrl: downloadURL,
                 ocrText: "",
                 createdAt: new Date().toISOString(),
+                downloads: 0
             });
+            
+            // Add to activity feed
+            await addDoc(collection(db, "activity"), {
+                text: `${profile.name} uploaded a new note for ${noteData.course.split(' - ')[1]}`,
+                createdAt: serverTimestamp(),
+            });
+
+            const userRef = doc(db, 'users', user.uid);
+            const userDoc = await getDoc(userRef);
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                const today = new Date().toISOString().split('T')[0];
+                const lastUploadDate = userData.lastUploadDate;
+
+                let newStreak = userData.streak || 0;
+                if (lastUploadDate !== today) {
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    if (lastUploadDate === yesterday.toISOString().split('T')[0]) {
+                        newStreak++;
+                    } else {
+                        newStreak = 1;
+                    }
+
+                    await updateDoc(userRef, {
+                        points: increment(10 + (newStreak > 1 ? 5 : 0)),
+                        streak: newStreak,
+                        lastUploadDate: today
+                    });
+                }
+            }
 
             setMessage('Note uploaded successfully!');
             setNoteData({ course: '', faculty: '', module: '', topic: '', tags: '' });
             setFile(null);
-            // Manually reset the file input value
             if (e.target.querySelector('input[type="file"]')) {
                 e.target.querySelector('input[type="file"]').value = '';
             }

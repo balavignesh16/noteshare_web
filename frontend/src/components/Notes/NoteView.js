@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp, increment, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useProfile } from '../../context/ProfileContext';
 import FullPageSpinner from '../Layout/FullPageSpinner';
@@ -43,7 +43,7 @@ export default function NoteView() {
                 const docRef = doc(db, 'notes', noteId);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
-                    setNote(docSnap.data());
+                    setNote({ id: docSnap.id, ...docSnap.data() });
                 } else {
                     setError('Note not found.');
                 }
@@ -75,9 +75,30 @@ export default function NoteView() {
                 userName: profile.name,
                 createdAt: serverTimestamp(),
             });
+
+            // Create a notification for the note owner
+            if (note && note.userId !== profile.uid) {
+                await addDoc(collection(db, "notifications"), {
+                    userId: note.userId,
+                    message: `${profile.name} commented on your note: "${note.topic}"`,
+                    createdAt: serverTimestamp(),
+                    read: false,
+                });
+            }
+
             setNewComment('');
         } catch (error) {
             console.error("Error adding comment: ", error);
+        }
+    };
+    
+    const handleDownload = async () => {
+        if (note && note.fileUrl) {
+            const noteRef = doc(db, 'notes', note.id);
+            await updateDoc(noteRef, {
+                downloads: increment(1)
+            });
+            window.open(note.fileUrl, '_blank');
         }
     };
 
@@ -92,15 +113,13 @@ export default function NoteView() {
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Note Preview</h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-6 text-center">This note will open in a new tab using your browser's PDF viewer.</p>
                     {note && note.fileUrl ? (
-                         <a 
-                            href={note.fileUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
+                         <button
+                            onClick={handleDownload}
                             className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
                         >
                             <Icon path="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" className="w-5 h-5 mr-2" />
                             Open PDF
-                        </a>
+                        </button>
                     ) : (
                         <p className="text-red-500">Could not find PDF URL.</p>
                     )}
@@ -116,6 +135,7 @@ export default function NoteView() {
                                 <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 space-y-2 text-sm text-gray-700 dark:text-gray-300">
                                     <p className="flex items-center"><Icon path="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /> <strong>Faculty:</strong> &nbsp;{note.faculty}</p>
                                     <p className="flex items-center"><Icon path="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /> <strong>Module:</strong> &nbsp;{note.module}</p>
+                                    <p className="flex items-center"><Icon path="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /> <strong>Downloads:</strong> &nbsp;{note.downloads || 0}</p>
                                 </div>
                                 <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
                                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Tags</h3>

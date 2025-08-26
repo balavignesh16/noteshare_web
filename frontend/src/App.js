@@ -10,7 +10,8 @@ import Dashboard from './components/Dashboard/Dashboard';
 import UserProfile from './components/Profile/UserProfile';
 import NoteUpload from './components/Notes/NoteUpload';
 import NoteView from './components/Notes/NoteView';
-import CourseView from './components/Courses/CourseView'; // <-- IMPORT NEW COMPONENT
+import CourseView from './components/Courses/CourseView';
+import Notifications from './components/Notifications/Notifications'; // <-- IMPORT NEW COMPONENT
 import FullPageSpinner from './components/Layout/FullPageSpinner';
 
 function ProtectedRoute({ user, children }) {
@@ -53,10 +54,13 @@ function App() {
               path="/note/:noteId" 
               element={<ProtectedRoute user={user}><NoteView /></ProtectedRoute>} 
             />
-            {/* V-- ADD NEW ROUTE FOR VIEWING A COURSE --V */}
             <Route 
               path="/course/:courseName" 
               element={<ProtectedRoute user={user}><CourseView /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/notifications" 
+              element={<ProtectedRoute user={user}><Notifications /></ProtectedRoute>} 
             />
 
             <Route path="*" element={<Navigate to="/" />} />
