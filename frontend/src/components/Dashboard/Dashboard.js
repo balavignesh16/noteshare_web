@@ -5,48 +5,64 @@ import { Link } from 'react-router-dom';
 import FullPageSpinner from '../Layout/FullPageSpinner';
 import { useProfile } from '../../context/ProfileContext';
 import Icon from '../Layout/Icon';
+import RequestNotes from '../Notes/RequestNotes';
 
-const StatCard = ({ icon, label, value, color }) => (
-    <div className={`bg-${color}-100 dark:bg-${color}-900/50 p-6 rounded-lg flex items-center space-x-4`}>
-        <div className={`text-${color}-600 dark:text-${color}-400`}>
+const StatCard = ({ icon, label, value, color }) => {
+    const colorVariants = {
+        primary: 'bg-primary/10 text-primary',
+        secondary: 'bg-secondary/10 text-secondary',
+        accent: 'bg-accent/10 text-accent',
+    };
+
+    return (
+        <div className={`p-6 rounded-lg flex items-center space-x-4 ${colorVariants[color] || colorVariants.primary} animate-slide-up`}>
             <Icon name={icon} className="w-10 h-10" />
+            <div>
+                <p className="text-2xl font-bold text-text-primary dark:text-white">{value}</p>
+                <p className="text-sm font-medium text-text-muted">{label}</p>
+            </div>
         </div>
-        <div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{label}</p>
-        </div>
-    </div>
-);
+    );
+};
 
 const CourseCard = ({ courseName }) => (
     <Link 
         to={`/course/${encodeURIComponent(courseName)}`} 
-        className="block p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-xl dark:hover:bg-gray-700 transition-all duration-300 transform hover:-translate-y-1"
+        className="block p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 animate-scale-in"
     >
-        <div className="h-24 bg-indigo-500 dark:bg-indigo-700 rounded-md mb-4 flex items-center justify-center">
+        <div className="h-24 bg-gradient-to-r from-primary to-secondary rounded-md mb-4 flex items-center justify-center">
             <Icon name="book-open" className="w-12 h-12 text-white" />
         </div>
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate">{courseName.split(' - ')[1]}</h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{courseName.split(' - ')[0]}</p>
+        <h3 className="text-lg font-bold text-text-primary dark:text-white truncate">{courseName.split(' - ')[1]}</h3>
+        <p className="text-sm text-text-muted mt-1">{courseName.split(' - ')[0]}</p>
     </Link>
 );
 
 const LeaderboardItem = ({ user, rank }) => (
     <li className="py-3 flex items-center justify-between">
         <div className="flex items-center">
-            <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400 w-8">{rank}</span>
-            <span className="text-gray-800 dark:text-gray-200 font-medium">{user.name}</span>
+            <span className="text-lg font-bold text-primary dark:text-secondary w-8">{rank}</span>
+            <span className="text-text-secondary dark:text-gray-200 font-medium">{user.name}</span>
         </div>
-        <span className="text-lg font-semibold text-gray-900 dark:text-white">{user.points} pts</span>
+        <span className="text-lg font-semibold text-text-primary dark:text-white">{user.points} pts</span>
     </li>
 );
 
 const ActivityFeedItem = ({ activity }) => (
     <div className="py-3">
-        <p className="text-sm text-gray-800 dark:text-gray-200">{activity.text}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-text-secondary dark:text-gray-200">{activity.text}</p>
+        <p className="text-xs text-text-muted mt-1">
             {activity.createdAt?.toDate().toLocaleString()}
         </p>
+    </div>
+);
+
+const RequestItem = ({ request }) => (
+    <div className="py-3">
+        <p className="text-sm font-semibold text-text-primary dark:text-white">{request.topic}</p>
+        <p className="text-xs text-text-muted">{request.course}</p>
+        <p className="text-xs text-text-muted mt-1">Module: {request.module}</p>
+        <p className="text-xs text-text-muted mt-1">Requested by: {request.requesterName}</p>
     </div>
 );
 
@@ -56,15 +72,18 @@ export default function Dashboard() {
     const [leaderboard, setLeaderboard] = useState([]);
     const [analytics, setAnalytics] = useState({ totalNotes: 0, totalDownloads: 0 });
     const [activityFeed, setActivityFeed] = useState([]);
+    const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('my-courses');
+    const [currentRequest, setCurrentRequest] = useState(0);
+    const [progress, setProgress] = useState(0);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch notes for courses and analytics
+                // Fetch notes and analytics
                 const notesSnapshot = await getDocs(collection(db, 'notes'));
                 const courseSet = new Set();
                 let totalDownloads = 0;
@@ -79,16 +98,23 @@ export default function Dashboard() {
                 // Fetch leaderboard data
                 const q = query(collection(db, 'users'), orderBy('points', 'desc'), limit(5));
                 const leaderboardSnapshot = await getDocs(q);
-                const leaderboardData = leaderboardSnapshot.docs.map(doc => doc.data());
+                const leaderboardData = leaderboardSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setLeaderboard(leaderboardData);
                 
                 // Fetch activity feed data
-                const activityQuery = query(collection(db, 'activity'), orderBy('createdAt', 'desc'), limit(5));
+                const activityQuery = query(collection(db, 'activity'), orderBy('createdAt', 'desc'), limit(3));
                 const activitySnapshot = await getDocs(activityQuery);
                 const activityData = activitySnapshot.docs.map(doc => doc.data());
                 setActivityFeed(activityData);
+                
+                // Fetch requests
+                const requestsQuery = query(collection(db, 'requests'), orderBy('createdAt', 'desc'), limit(4));
+                const requestsSnapshot = await getDocs(requestsQuery);
+                const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setRequests(requestsData);
 
             } catch (err) {
+                console.error("Error fetching dashboard data:", err);
                 setError('Failed to fetch dashboard data.');
             } finally {
                 setLoading(false);
@@ -97,6 +123,39 @@ export default function Dashboard() {
         fetchData();
     }, []);
 
+    useEffect(() => {
+        if (requests.length > 1) {
+            const interval = setInterval(() => {
+                setCurrentRequest((prev) => (prev + 1) % requests.length);
+            }, 20000);
+            return () => clearInterval(interval);
+        }
+    }, [requests]);
+
+    useEffect(() => {
+        let start = null;
+        const animateProgress = (timestamp) => {
+            if (!start) start = timestamp;
+            const elapsed = timestamp - start;
+            const newProgress = Math.min((elapsed / 20000) * 100, 100);
+            setProgress(newProgress);
+            if (elapsed < 20000) {
+                requestAnimationFrame(animateProgress);
+            }
+        };
+
+        const animationFrameId = requestAnimationFrame(animateProgress);
+        return () => cancelAnimationFrame(animationFrameId);
+    }, [currentRequest]);
+
+    const handleNextRequest = () => {
+        setCurrentRequest((prev) => (prev + 1) % requests.length);
+    };
+
+    const handlePrevRequest = () => {
+        setCurrentRequest((prev) => (prev - 1 + requests.length) % requests.length);
+    };
+    
     const { myCourses, discoverCourses } = useMemo(() => {
         const subscribed = new Set(profile?.subscribedCourses || []);
         const myCourses = allAvailableCourses.filter(course => subscribed.has(course));
@@ -116,15 +175,15 @@ export default function Dashboard() {
 
     return (
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-            <div className="mb-8">
-                <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">Welcome, {profile?.name}!</h1>
-                <p className="text-lg text-gray-600 dark:text-gray-400">Ready to learn something new today?</p>
+            <div className="mb-8 animate-fade-in">
+                <h1 className="text-4xl font-extrabold text-text-primary dark:text-white">Welcome, {profile?.name}!</h1>
+                <p className="text-lg text-text-muted">Let's start learning!</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                <StatCard icon="document-text" label="Total Notes" value={analytics.totalNotes} color="indigo" />
-                <StatCard icon="download" label="Total Downloads" value={analytics.totalDownloads} color="green" />
-                <StatCard icon="sparkles" label="Your Points" value={profile?.points || 0} color="yellow" />
+                <StatCard icon="document-text" label="Total Notes" value={analytics.totalNotes} color="primary" />
+                <StatCard icon="download" label="Total Downloads" value={analytics.totalDownloads} color="secondary" />
+                <StatCard icon="sparkles" label="Your Points" value={profile?.points || 0} color="accent" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -133,13 +192,13 @@ export default function Dashboard() {
                         <div className="flex border-b border-gray-200 dark:border-gray-700">
                             <button
                                 onClick={() => setActiveTab('my-courses')}
-                                className={`px-6 py-3 font-semibold ${activeTab === 'my-courses' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'}`}
+                                className={`px-6 py-3 font-semibold ${activeTab === 'my-courses' ? 'text-primary border-b-2 border-primary' : 'text-text-muted'}`}
                             >
                                 My Courses
                             </button>
                             <button
                                 onClick={() => setActiveTab('discover')}
-                                className={`px-6 py-3 font-semibold ${activeTab === 'discover' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'}`}
+                                className={`px-6 py-3 font-semibold ${activeTab === 'discover' ? 'text-primary border-b-2 border-primary' : 'text-text-muted'}`}
                             >
                                 Discover
                             </button>
@@ -153,8 +212,8 @@ export default function Dashboard() {
                                     {myCourses.map(courseName => <CourseCard key={courseName} courseName={courseName} />)}
                                 </div>
                             ) : (
-                                <div className="text-center py-10 px-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-                                    <p className="text-gray-500 dark:text-gray-400">You haven't subscribed to any courses with available notes yet. Go to your profile to add some!</p>
+                                <div className="text-center py-10 px-4 bg-white dark:bg-gray-800 rounded-lg shadow-md animate-fade-in">
+                                    <p className="text-text-muted">You haven't subscribed to any courses with available notes yet. Go to your profile to add some!</p>
                                 </div>
                             )}
                         </div>
@@ -168,7 +227,7 @@ export default function Dashboard() {
                                     placeholder="Search all courses..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full max-w-xs px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md text-gray-900 dark:text-white"
+                                    className="w-full max-w-xs px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md text-text-primary dark:text-white"
                                 />
                             </div>
                             {filteredDiscoverCourses.length > 0 ? (
@@ -176,30 +235,53 @@ export default function Dashboard() {
                                     {filteredDiscoverCourses.map(courseName => <CourseCard key={courseName} courseName={courseName} />)}
                                 </div>
                             ) : (
-                                <p className="text-center text-gray-500 dark:text-gray-400 py-10">No other courses found.</p>
+                                <p className="text-center text-text-muted py-10">No other courses found.</p>
                             )}
                         </div>
                     )}
                 </div>
                 <div className="lg:col-span-1 space-y-8">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Activity Feed</h2>
+                    <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md animate-slide-up" style={{ animationDelay: '0.3s' }}>
+                        <h2 className="text-2xl font-bold text-text-primary dark:text-white mb-4">Leaderboard</h2>
+                        <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                            {leaderboard.map((user, index) => (
+                                <LeaderboardItem key={user.id} user={user} rank={index + 1} />
+                            ))}
+                        </ul>
+                    </div>
+                    <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md animate-slide-up" style={{ animationDelay: '0.2s' }}>
+                        <h2 className="text-2xl font-bold text-text-primary dark:text-white mb-4">Activity Feed</h2>
                         <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                             {activityFeed.map((activity, index) => (
                                 <ActivityFeedItem key={index} activity={activity} />
                             ))}
                         </ul>
                     </div>
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Leaderboard</h2>
-                        <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                            {leaderboard.map((user, index) => (
-                                <LeaderboardItem key={user.uid} user={user} rank={index + 1} />
+                    <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                        <h2 className="text-2xl font-bold text-text-primary dark:text-white mb-4">Requested Notes</h2>
+                        <div className="relative h-40 overflow-hidden">
+                            {requests.map((request, index) => (
+                                <div
+                                    key={request.id}
+                                    className={`absolute w-full transition-transform duration-700 ease-in-out ${index === currentRequest ? 'translate-x-0' : '-translate-x-full'}`}
+                                >
+                                    <RequestItem request={request} />
+                                </div>
                             ))}
-                        </ul>
+                        </div>
+                        <div className="mt-4">
+                            <div className="w-full bg-gray-200 rounded-full h-1 dark:bg-gray-700">
+                                <div className="bg-primary h-1 rounded-full" style={{ width: `${progress}%` }}></div>
+                            </div>
+                            <div className="flex justify-between mt-2">
+                                <button onClick={handlePrevRequest} className="text-primary">&lt; Prev</button>
+                                <button onClick={handleNextRequest} className="text-primary">Next &gt;</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+            <RequestNotes />
         </div>
     );
 }
